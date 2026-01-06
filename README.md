@@ -4,6 +4,7 @@ Installation rapide
 ```bash
 git clone https://gitlab.com/esgi4255746/web-temps-reel.git
 cd web-temps-reel
+cd app/
 npm install
 ```
 
