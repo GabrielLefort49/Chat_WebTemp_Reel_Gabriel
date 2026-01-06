@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <title>WebSocket Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="theme.js" defer></script>
+  </head>
+
+  <body>
+    <nav>
+      <a href="index.html">Index</a>
+      <a href="polling.html">Polling</a>
+      <a href="long-polling.html">Long-polling</a>
+      <a href="sse.html">SSE</a>
+      <a href="websocket.html">WebSocket</a>
+      <button id="theme-toggle"></button>
+    </nav>
+
+    <main>
+        <div>
+            <h1>Chat WebSocket Sécurisé</h1>
+
+            <!-- SECTION LOGIN -->
+            <div id="login-section">
+                <h2>Connexion</h2>
+                <p style="color: #666; margin-bottom: 15px;">
+                    Admin: admin@example.com / admin123<br>
+                    User: user@example.com / user123
+                </p>
+                <input id="email" class="input-chat" type="email" placeholder="Email...">
+                <input id="password" class="input-chat" type="password" placeholder="Mot de passe...">
+                <button id="loginBtn">Se connecter</button>
+                <p id="loginError" style="color: red; display: none;"></p>
+            </div>
+
+            <!-- SECTION AUTHENTIFICATION (Après login) -->
+            <div id="auth-section" style="display:none;">
+                <h2>Sélectionner un profil</h2>
+                <p id="userInfo" style="color: #666; margin-bottom: 10px;"></p>
+                <div style="margin: 20px 0;">
+                    <button id="btn-admin" class="input-chat" style="padding: 10px 20px; margin-right: 10px; display:none;">Administrateur</button>
+                    <button id="btn-user" class="input-chat" style="padding: 10px 20px;">Utilisateur</button>
+                </div>
+            </div>
+
+            <!-- SECTION PSEUDO -->
+            <div id="pseudo-section" style="display:none;">
+                <p id="profile-display" style="color: #666; margin-bottom: 10px;"></p>
+                <input id="pseudo" class="input-chat" type="text" placeholder="Votre pseudo...">
+                <button id="setname">Valider le pseudo</button>
+            </div>
+
+            <br>
+
+            <!-- SECTION CHAT -->
+            <div id="chat-section" style="display:none;">
+                <p id="current-user" >
+                    Connecté en tant que : <strong></strong>
+                </p>
+                <label for="rooms">Room :</label>
+                <select id="rooms" class="input-chat">
+                    <option value="lobby" selected>lobby</option>
+                </select>
+                <button id="selectRoom">Rejoindre la room</button>
+
+                <div id="messages" class="output"></div>
+
+                <input id="input" class="input-chat" type="text" placeholder="Votre message...">
+                <button id="send">Envoyer</button>
+
+            </div>
+            
+            <div id="admin-panel" style="display:none; margin-top:20px; border-top:1px solid #ddd; padding-top:12px;">
+                <h3>Administration des channels</h3>
+                <div style="margin-bottom:8px;">
+                    <input id="newChatName" class="input-chat" type="text" placeholder="Nom du channel...">
+                    <label style="margin-left:8px;"><input id="roleAdminCb" type="checkbox" checked> admin</label>
+                    <label style="margin-left:8px;"><input id="roleUserCb" type="checkbox" checked> user</label>
+                    <button id="createChatBtn">Créer</button>
+                </div>
+                <div>
+                    <h4>Channels existants</h4>
+                    <ul id="adminChatList" style="list-style:none; padding-left:0;"></ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        let socket = null
+        let userToken = null
+        let userEmail = null
+        let userRole = null
+        
+        const messages = document.getElementById('messages')
+        const input = document.getElementById('input')
+        const send = document.getElementById('send')
+        const pseudoInput = document.getElementById('pseudo')
+        const setNameBtn = document.getElementById('setname')
+        const roomSelect = document.getElementById('rooms')
+        const selectRoomBtn = document.getElementById('selectRoom')
+
+        const loginSection = document.getElementById('login-section')
+        const emailInput = document.getElementById('email')
+        const passwordInput = document.getElementById('password')
+        const loginBtn = document.getElementById('loginBtn')
+        const loginError = document.getElementById('loginError')
+        const userInfo = document.getElementById('userInfo')
+
+        const authSection = document.getElementById('auth-section')
+        const pseudoSection = document.getElementById('pseudo-section')
+        const chatSection = document.getElementById('chat-section')
+        const currentUser = document.getElementById('current-user')
+        const currentUserName = currentUser.querySelector('strong')
+        const profileDisplay = document.getElementById('profile-display')
+
+        const btnAdmin = document.getElementById('btn-admin')
+        const btnUser = document.getElementById('btn-user')
+
+        const adminPanel = document.getElementById('admin-panel')
+        const newChatName = document.getElementById('newChatName')
+        const roleAdminCb = document.getElementById('roleAdminCb')
+        const roleUserCb = document.getElementById('roleUserCb')
+        const createChatBtn = document.getElementById('createChatBtn')
+        const adminChatList = document.getElementById('adminChatList')
+
+        let activeRoom = null
+        let pseudoSet = false
+        let currentProfile = null
+
+        function addLine(text) {
+            messages.textContent += text + '\n'
+            messages.scrollTop = messages.scrollHeight
+        }
+
+        // LOGIN
+        loginBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim()
+            const password = passwordInput.value.trim()
+
+            if (!email || !password) {
+                loginError.textContent = 'Email et mot de passe requis'
+                loginError.style.display = 'block'
+                return
+            }
+
+            try {
+                const response = await fetch('http://localhost:3000/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                })
+
+                if (!response.ok) {
+                    throw new Error('Identifiants incorrects')
+                }
+
+                const data = await response.json()
+                userToken = data.access_token
+                userEmail = email
+
+                initializeSocket(data.role)
+
+                loginSection.style.display = 'none'
+                userInfo.textContent = `Connecté en tant que : ${email}`
+                authSection.style.display = 'block'
+
+                // Afficher les boutons selon le rôle
+                if (data.role === 'admin') {
+                    btnAdmin.style.display = 'inline-block'
+                    btnUser.style.display = 'inline-block'
+                } else {
+                    btnAdmin.style.display = 'none'
+                    btnUser.style.display = 'inline-block'
+                }
+
+            } catch (error) {
+                loginError.textContent = error.message
+                loginError.style.display = 'block'
+                console.error('Login error:', error)
+            }
+        })
+
+        function initializeSocket(role) {
+            userRole = role
+            socket = io('http://localhost:3000', {
+                auth: {
+                    token: userToken
+                },
+                withCredentials: true
+            })
+
+            socket.on('authError', (data) => {
+                alert('Erreur authentification: ' + data.message)
+                location.reload()
+            })
+
+            socket.on('availableRooms', (rooms) => {
+                roomSelect.innerHTML = ''
+                rooms.forEach(room => {
+                    const option = document.createElement('option')
+                    option.value = room
+                    option.textContent = room
+                    if (room === 'lobby') option.selected = true
+                    roomSelect.appendChild(option)
+                })
+            })
+
+            socket.emit('requestRooms')
+
+            socket.on('roomsList', (list) => {
+                // list can be array of strings or array of {name, roles}
+                if (!list) return
+                if (Array.isArray(list) && list.length && typeof list[0] === 'string') {
+                    // plain string list (likely user view)
+                    updateRoomsSelect(list)
+                } else {
+                    // full list with roles (admin payload)
+                    const full = list.map(item => ({ name: item.name, roles: item.roles }))
+                    // show full list in admin panel
+                    updateAdminList(full)
+                    // but only populate room selector with rooms allowed for the currently selected profile
+                    const profileToUse = currentProfile || userRole
+                    const visible = full.filter(i => i.roles.includes(profileToUse)).map(i => i.name)
+                    updateRoomsSelect(visible)
+                }
+            })
+
+            socket.on('roomsUpdated', (full) => {
+                if (!full) return
+                updateAdminList(full)
+                const profileToUse = currentProfile || userRole
+                const visible = full.filter(i => i.roles.includes(profileToUse)).map(i => i.name)
+                updateRoomsSelect(visible)
+            })
+
+            socket.on('newMessage', payload => {
+                addLine(`[${payload.room}][${payload.timestamp}] ${payload.user} : ${payload.message}`)
+            })
+
+            socket.on('systemMessage', payload => {
+                addLine(`[${payload.room}] ${payload.message}`)
+            })
+        }
+
+        function updateRoomsSelect(arr) {
+            roomSelect.innerHTML = ''
+            arr.forEach(room => {
+                const option = document.createElement('option')
+                option.value = room
+                option.textContent = room
+                if (room === 'lobby') option.selected = true
+                roomSelect.appendChild(option)
+            })
+        }
+
+        function updateAdminList(full) {
+            if (!adminChatList) return
+            adminChatList.innerHTML = ''
+            full.forEach(item => {
+                const li = document.createElement('li')
+                li.style.marginBottom = '6px'
+                li.textContent = `${item.name} [${item.roles.join(',')}] `
+                const btn = document.createElement('button')
+                btn.textContent = 'Supprimer'
+                btn.style.marginLeft = '8px'
+                btn.addEventListener('click', () => {
+                    if (!confirm(`Supprimer le channel ${item.name} ?`)) return
+                    socket.emit('deleteChat', { name: item.name })
+                })
+                li.appendChild(btn)
+                adminChatList.appendChild(li)
+            })
+        }
+
+        // PROFIL
+        function selectProfile(profile) {
+            if (userRole === 'admin' && profile === 'user') {
+                alert('Attention : En tant que Administrateur, vous aurez pas accès au chat support dans ce groupe de chanel.')
+            }
+            
+            currentProfile = profile
+            socket.emit('setProfile', profile)
+            socket.emit('requestRooms')
+            authSection.style.display = 'none'
+            pseudoSection.style.display = 'block'
+            const profileLabel = profile === 'admin' ? 'Administrateur' : 'Utilisateur'
+            profileDisplay.textContent = `Profil sélectionné : ${profileLabel}`
+            if (userRole === 'admin' && profile === 'admin') {
+                adminPanel.style.display = 'block'
+            } else {
+                adminPanel.style.display = 'none'
+            }
+        }
+
+        btnAdmin.addEventListener('click', () => {
+            selectProfile('admin')
+        })
+
+        btnUser.addEventListener('click', () => {
+            selectProfile('user')
+        })
+
+        // PSEUDO
+        setNameBtn.addEventListener('click', () => {
+            const name = pseudoInput.value.trim()
+            if (name.length === 0) return
+
+            socket.emit('setName', name)
+            pseudoSet = true
+
+            addLine(` Pseudo défini : ${name}`)
+
+            currentUserName.textContent = name
+            currentUser.style.display = 'block'
+            pseudoSection.style.display = 'none'
+            chatSection.style.display = 'block'
+
+            const defaultRoom = 'lobby'
+            roomSelect.value = defaultRoom
+            socket.emit('joinRoom', { room: defaultRoom })
+            activeRoom = defaultRoom
+
+            addLine(` Room active : ${activeRoom}`)
+        })
+
+        if (createChatBtn) {
+            createChatBtn.addEventListener('click', () => {
+                const name = (newChatName.value || '').trim()
+                if (!name) return alert('Nom requis')
+                const roles = []
+                if (roleAdminCb.checked) roles.push('admin')
+                if (roleUserCb.checked) roles.push('user')
+                if (!roles.length) return alert('Sélectionnez au moins un rôle')
+                socket.emit('createChat', { name, roles })
+                newChatName.value = ''
+            })
+        }
+
+        // ROOM
+        selectRoomBtn.addEventListener('click', () => {
+            if (!pseudoSet) return
+
+            const room = roomSelect.value
+
+            if (room === activeRoom) {
+                addLine(` Vous êtes déjà dans la room ${room}`)
+                return
+            }
+
+            socket.emit('joinRoom', { room })
+            activeRoom = room
+            addLine(` Room active : ${activeRoom}`)
+        })
+
+        // MESSAGES
+        send.addEventListener('click', () => {
+            const text = input.value.trim()
+
+            if (!pseudoSet) {
+                addLine(' Vous devez définir un pseudo')
+                return
+            }
+
+            if (!activeRoom) {
+                addLine(' Aucune room active')
+                return
+            }
+
+            if (text.length === 0) return
+
+            socket.emit('sendMessage', {
+                room: activeRoom,
+                message: text
+            })
+
+            input.value = ''
+        })
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') send.click()
+        })
+    </script>
+
+  </body>
+</html>

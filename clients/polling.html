@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Tests Web Temps Réel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TP web temps reel Galactic Robots" />
+    <meta name="author" content="Nicolas Hersant" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="style.css">
+    <script src="theme.js" defer></script>
+  </head>
+
+  <body>
+
+    <nav>
+      <a href="index.html">Index</a>
+      <a href="polling.html">Polling</a>
+      <a href="long-polling.html">Long-polling</a>
+      <a href="sse.html">SSE</a>
+      <a href="websocket.html">WebSocket</a>
+      <button id="theme-toggle" onclick="toggleTheme()"></button>
+    </nav>
+
+    <main>
+      <h1>Polling</h1>
+      <pre id="output" class="output"></pre>
+    </main>
+    
+
+    <script>
+    async function fetchTime() {
+      const res = await fetch('http://localhost:3000/time')
+      const data = await res.json()
+      document.getElementById('output').textContent = JSON.stringify(data)
+    }
+
+    setInterval(fetchTime, 2000) // toutes les 2 secondes
+    fetchTime()
+    </script>
+  </body>
+</html>

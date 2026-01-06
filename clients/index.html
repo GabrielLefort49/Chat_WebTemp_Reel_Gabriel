@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <title>Tests Web Temps Réel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TP web temps reel Galactic Robots" />
+    <meta name="author" content="Nicolas Hersant" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="style.css">
+    <script src="theme.js" defer></script>
+  </head>
+
+  <body>
+
+    <nav>
+      <a href="index.html">Index</a>
+      <a href="polling.html">Polling</a>
+      <a href="long-polling.html">Long-polling</a>
+      <a href="sse.html">SSE</a>
+      <a href="websocket.html">WebSocket</a>
+      <button id="theme-toggle" onclick="toggleTheme()"></button>
+    </nav>
+
+    <main>
+      <h1>Tests Web Temps Réel</h1>
+      <p>
+        Choisissez un mode de communication pour observer son fonctionnement en temps réel
+        (polling, long-polling, SSE et WebSocket).
+      </p>
+
+      <div class="grid">
+
+        <a class="card" href="polling.html">
+        <h2>Polling</h2>
+        <p>Le client interroge régulièrement le serveur à intervalle fixe.</p>
+        </a>
+
+        <a class="card" href="long-polling.html">
+        <h2>Long-polling</h2>
+        <p>Le serveur garde la requête ouverte jusqu’à un événement nouveau.</p>
+        </a>
+
+        <a class="card" href="sse.html">
+        <h2>SSE</h2>
+        <p>Canal unidirectionnel où le serveur pousse des événements continus.</p>
+        </a>
+
+        <a class="card" href="websocket.html">
+        <h2>WebSocket</h2>
+        <p>Canal bidirectionnel complet entre client et serveur.</p>
+        </a>
+
+      </div>
+    </main>
+
+    </body>
+</html>
